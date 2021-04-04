@@ -1,76 +1,129 @@
 window.onload = () => {
-  // wrapper element
-  const swiperWrapper = document.querySelector(".swiper-wrapper");
-  // 所有 slides element
-  const slides = document.querySelectorAll(".swiper-slide");
-  // slides 數量
-  const slidesLength = slides.length;
-  // slide 的寬度
-  const slideWidth = slides[0].offsetWidth;
-  // slides 間的間格距離
-  const slideGap = parseInt(window.getComputedStyle(slides[0]).marginRight);
+  const swiperWrapper = document.querySelector('.swiper-wrapper')
+  let slides = document.querySelectorAll('.swiper-slide')
+
+  // 將第一個複製到結尾，將最後一個複製到第一個位置前
+  // 0 1 2 3 4 => 4 0 1 2 3 4 1
+  swiperWrapper.appendChild(slides[0].cloneNode(true))
+  swiperWrapper.insertBefore(
+    slides[slides.length - 1].cloneNode(true),
+    slides[0]
+  )
+
+  slides = document.querySelectorAll('.swiper-slide')
 
   // 上一個/下一個按鈕
-  const prevBtn = document.querySelector("#swiper-btn-prev");
-  const nextBtn = document.querySelector("#swiper-btn-next");
-  // translate3dX: 當前 wrapper 的 translate3d 的 x 的值
-  // downX: 點擊的 x 座標
-  // moveToX: 移動的 x 座標
-  let translate3dX = 0,
-    downX = 0,
-    moveToX = 0;
+  const prevBtn = document.querySelector('.swiper-btn-prev')
+  const nextBtn = document.querySelector('.swiper-btn-next')
 
-  // 目前的 slide index
-  let currentIndex = 0;
+  ////////////////////////////////////////////////////////////////////////////////
+  // define carousel
+  const carouselProperty = {
+    index: 1,
+    translate3dX: 0,
+    slidesLength: slides.length,
+    useTransition: false,
+    transitioning: false,
+    _slidesWidth: slides[0].offsetWidth,
+    _slidesGap: parseInt(window.getComputedStyle(slides[0]).marginRight)
+  }
 
-  // slide to target index
-  const slideTo = (index) => {
-    // 判斷是否在 0 <= index < slidesLength 範圍內
-    // index < 0 就 設為 -.1
-    // index >= slidesLength 就 設為 slidesLength - .9
-    currentIndex =
-      index < 0 ? -0.1 : index >= slidesLength ? slides.length - 0.9 : index;
+  const carousel = new Proxy(carouselProperty, {
+    set(target, prop, value) {
+      switch (prop) {
+        case 'index':
+          if (target.useTransition) {
+            if (target.transitioning) return
+            target.transitioning = true
+          }
+          target.index = value
+          target.translate3dX =
+            -target.index * (target._slidesWidth + target._slidesGap)
+          if (target.useTransition) {
+            swiperWrapper.style['transition-duration'] = '300ms'
+          } else {
+            target.useTransition = true
+          }
+          swiperWrapper.style.transform = `translate3d(${target.translate3dX}px, 0, 0)`
+          break
+        case 'useTransition':
+        case 'transitioning':
+          target[prop] = value
+          break
+        default:
+          if (!target.hasOwnProperty(prop))
+            throw new Error(`This object doesn't have this property: ${prop}`)
+          if (prop !== 'index')
+            throw new Error(`Can't set this property: ${prop}`)
+          if (typeof value !== 'number')
+            throw new Error(`Expected number, got ${typeof value}`)
+      }
+    },
+    get(target, prop) {
+      if (prop.substr(0, 1) === '_')
+        throw new Error(`This property is private: ${prop}`)
+      if (!target.hasOwnProperty(prop))
+        throw new Error(`Can't find this property: ${prop}`)
+      // if (prop === 'translate3dX') return -target.index * (target.slidesWidth * target._slidesGap)
+      return target[prop]
+    }
+  })
 
-    // 計算 translate3dX = 目前 slide index * (slide寬 + 間距)
-    translate3dX = -currentIndex * (slideWidth + slideGap);
-    swiperWrapper.style.transform = `translate3d(${translate3dX}px, 0, 0)`;
+  ////////////////////////////////////////////////////////////////////////////////
+  prevBtn.addEventListener('click', () => slideTo(-1))
+  nextBtn.addEventListener('click', () => slideTo(1))
 
-    setTimeout(() => {
-      // 左右到底時的效果
-      currentIndex =
-        currentIndex < 0 ? Math.ceil(currentIndex) : Math.floor(currentIndex);
-      translate3dX = -currentIndex * (slideWidth + slideGap);
-      swiperWrapper.style.transform = `translate3d(${translate3dX}px, 0, 0)`;
-    }, 400);
-  };
+  ////////////////////////////////////////////////////////////////////////////////
+  let downX = 0,
+    moveToX = 0
 
-  prevBtn.onclick = () => slideTo(currentIndex - 1);
-  nextBtn.onclick = () => slideTo(currentIndex + 1);
+  // init
+  carousel.index = 1
 
-  const cancelDrag = () => {
-    document.onmouseup = null;
-    document.onmousemove = null;
-    // 判斷 currentIndex 值
-    currentIndex =
-      moveToX < -100
-        ? currentIndex + (currentIndex + 1 < slidesLength ? 1 : 0)
-        : moveToX > 100
-        ? currentIndex - (currentIndex - 1 >= 0 ? 1 : 0)
-        : currentIndex;
-    slideTo(currentIndex);
-  };
+  // start drag element when mousedown on swiperWrapper
+  swiperWrapper.addEventListener('mousedown', (e) => {
+    e.preventDefault()
+    downX = e.clientX
+    document.addEventListener('mousemove', draggingElement)
+    document.addEventListener('mouseup', stopDraggingElement)
+  })
 
-  const drag = (e) => {
-    e.preventDefault();
-    moveToX = e.clientX - downX;
+  // set transition status = false when transitionend
+  swiperWrapper.addEventListener('transitionend', () => {
+    carousel.transitioning = false
+    swiperWrapper.style['transition-duration'] = '0ms'
+    if (carousel.index === 0) {
+      carousel.useTransition = false
+      carousel.index = carousel.slidesLength - 2
+    } else if (carousel.index === carousel.slidesLength - 1) {
+      carousel.useTransition = false
+      carousel.index = 1
+    }
+  })
+
+  ////////////////////////////////////////////////////////////////////////////////
+  // functions
+  /** slide to target index
+   * @param {number} index target index
+   */
+  function slideTo(index) {
+    carousel.index += index
+  }
+
+  /** dragging element */
+  function draggingElement(e) {
+    e.preventDefault()
+    moveToX = e.clientX
     swiperWrapper.style.transform = `translate3d(${
-      moveToX + translate3dX
-    }px, 0, 0)`;
-  };
+      moveToX - downX + carousel.translate3dX
+    }px, 0, 0)`
+  }
 
-  swiperWrapper.onmousedown = (e) => {
-    downX = e.clientX;
-    document.onmouseup = cancelDrag;
-    document.onmousemove = drag;
-  };
-};
+  /** stop dragging element */
+  function stopDraggingElement(e) {
+    e.preventDefault()
+    document.removeEventListener('mousemove', draggingElement)
+    document.removeEventListener('mouseup', stopDraggingElement)
+    slideTo(moveToX - downX > 100 ? -1 : moveToX - downX < -100 ? 1 : 0)
+  }
+}
