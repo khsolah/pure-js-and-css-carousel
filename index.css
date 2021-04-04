@@ -17,7 +17,7 @@
   justify-content: flex-start;
   align-items: center;
   transform: translate3d(0, 0, 0);
-  transition: transform .5s ease;
+  transition: transform 0.5s ease;
 }
 
 .swiper-slide {
@@ -50,7 +50,6 @@
 .swiper-btn-next {
   right: 0;
 }
-
 
 .element {
   display: block;
