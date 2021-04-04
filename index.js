@@ -64,7 +64,6 @@ window.onload = () => {
         throw new Error(`This property is private: ${prop}`)
       if (!target.hasOwnProperty(prop))
         throw new Error(`Can't find this property: ${prop}`)
-      // if (prop === 'translate3dX') return -target.index * (target.slidesWidth * target._slidesGap)
       return target[prop]
     }
   })
